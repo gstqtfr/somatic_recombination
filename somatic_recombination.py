@@ -2,9 +2,7 @@
 
 from collections import defaultdict
 from functools import partial
-
 import numpy as np
-
 import recombination_utils as recomb
 
 

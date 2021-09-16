@@ -60,15 +60,14 @@ def _iteration(repertoire, distances, loss_function, repertoire_gene_affinity, m
     return distances, repertoire, repertoire_gene_affinity
 
 
-# FIXME: we'll need some params here ...
-# def loop(popsz, size, clonal_pool_size, sz_of_alphabet, loss_function):
 def loop_with_gene_and_antibody_selection(mutate_op,
                                           sz_of_pop=20,
                                           sz_of_genome=10,
                                           sz_of_clonal_pool=20,
                                           sz_of_alphabet=256,
                                           n_iterations=100,
-                                          epsilon=1e-1):
+                                          epsilon=1e-1,
+                                          verbose=False):
     # our "target": we need to find this particular genome (*big* search space)
     antigen = np.full(shape=(sz_of_genome,), fill_value=0, dtype='int16')
     # this is the maximum distance, as far away as possible from our target as
@@ -94,7 +93,7 @@ def loop_with_gene_and_antibody_selection(mutate_op,
                                                 weights,
                                                 beta)
 
-    for n in range(1, n_iterations+1):
+    for n in range(1, n_iterations + 1):
         distances, repertoire, weights = _iteration(
             repertoire=repertoire,
             distances=distances,
@@ -107,14 +106,16 @@ def loop_with_gene_and_antibody_selection(mutate_op,
         # early_stopping(distances, epsilon=1e2)
         done, index = recomb.early_stopping(distances, epsilon)
         if done:
-            print(f"Reached convergence at iteration {n} within tolerance {epsilon}")
-            return repertoire, weights, distances
+            if verbose:
+                print(f"Reached convergence at iteration {n} within tolerance {epsilon}")
+            return n, repertoire, weights, distances
         avg_distance = np.sum(np.array(list(distances.values()))) / sz_of_pop
 
-        print(f"{n}\t{avg_distance:.2f}")
+        if verbose:
+            print(f"{n}\t{avg_distance:.2f}")
 
         # dummy return statement, it'll do for now
-    return repertoire, weights, distances
+    return n, repertoire, weights, distances
 
 
 def create_clonal_pool(antibody, weights, sz_of_genome, sz_of_clonal_pool, mutate_op):
@@ -135,10 +136,6 @@ def create_clonal_pool(antibody, weights, sz_of_genome, sz_of_clonal_pool, mutat
         (hotspot, length) = recomb.get_hotspot_and_region(sz=sz_of_genome)
 
         # mutate the flip out of it
-        # FIXME: need something a little more sophisticated than ths - we need to
-        # FIXME: 1) get the new mutated section
-        # FIXME: 2) join it into the antibody at the given hotspot
-        # clonal_pool[i] = mutate_op(length=length, weights=weights)
         mutant = mutate_op(length=length, weights=weights)
         # print(f"mutant: {mutant}")
         # print(f"B/4: antibody: {antibody}")
