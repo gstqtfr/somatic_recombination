@@ -34,27 +34,24 @@ def _iteration(repertoire, loss_function, repertoire_gene_affinity, beta, sz_of_
 
 # FIXME: we'll need some params here ...
 # def loop(popsz, size, clonal_pool_size, sz_of_alphabet, loss_function):
-def loop_with_gene_and_antibody_selection():
-    # how big our repertoire is
-    popsz = 20
-    # how many clones we create
-    clonal_pool_sz = 30
-    # this is the total number of potential genes
-    sz_of_alphabet = 256
-    # ... & this is how many genes build an antibody
-    sz_of_genome = 5
-    # number of times we loop around, cloning & mutating ...
-    n_iterations = 100
+def loop_with_gene_and_antibody_selection(sz_of_pop=20,
+                                 sz_of_genome=10,
+                                 sz_of_clonal_pool=20,
+                                 sz_of_alphabet=256,
+                                 n_iterations=100,
+                                 epsilon=1e-1,
+                                 verbose=False):
+
     # our "target": we need to find this particular genome (*big* search space)
     antigen = np.full(shape=(sz_of_genome,), fill_value=0, dtype='int16')
     # this is the maximum distance, as far away as possible from our target as
     # we can get
-    maximum_distance = np.full(shape=(sz_of_genome), fill_value=255, dtype='int16')
+    maximum_distance = np.full(shape=(sz_of_genome), fill_value=(sz_of_alphabet-1), dtype='int16')
 
     beta = 1.0 / sz_of_alphabet
 
     # the repertoire is our population of "circulating" antibodies
-    repertoire = recomb.initialize_population(popsz, sz_of_genome)
+    repertoire = recomb.initialize_population(sz_of_pop, sz_of_genome)
     # we give each gene a (fairly small) probability of being chosen
     repertoire_gene_affinity = recomb.initialize_gene_affinity(sz_of_alphabet, beta)
 
@@ -64,6 +61,7 @@ def loop_with_gene_and_antibody_selection():
     # get the distance
     distances = recomb.get_distance(repertoire, loss_function=loss_function)
 
+    # get the affinity of the gene expressed in each antibody
     repertoire_gene_affinity = recomb.gene_affinity_per_antibody(repertoire,
                                                                  distances,
                                                                  repertoire_gene_affinity,
@@ -74,3 +72,21 @@ def loop_with_gene_and_antibody_selection():
 
     # dummy return statement, it'll do for now
     return repertoire, repertoire_gene_affinity, distances
+
+
+def create_clonal_pool(antibody, weights, n_clone_pool, mutate_op):
+    '''Takes an antibody & creates a pool of clones. They are then subjected to
+        a mutation process
+        :param antibody: numpy array representing the antibody
+        :param weights: array of probabilities affecting selection of genes
+        :param n_clone_pool: number of clones we're going to build
+        :param mutate_op: partial function of somatic hypermutation operator
+        :return: the hypermutated pool of clones
+        '''
+    # we don't want to change the antibody in the repertoire yet ...
+    _antibody = np.copy(antibody)
+    clonal_pool = np.tile(_antibody, (n_clone_pool, 1))
+    for i in range(0, n_clone_pool):
+        # mutate the flip out of it
+        clonal_pool[i] = mutate_op(clonal_pool[i], weights)
+    return clonal_pool

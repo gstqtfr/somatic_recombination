@@ -2,22 +2,30 @@
 
 from collections import defaultdict
 from functools import partial
+
 import numpy as np
+
 import recombination_utils as recomb
+
 
 def loop_with_antibody_selection(sz_of_pop=20,
                                  sz_of_genome=5,
                                  sz_of_clonal_pool=20,
                                  sz_of_alphabet=256,
                                  n_iterations=100,
-                                 epsilon=1e-1):
+                                 epsilon=1e-1,
+                                 verbose=False):
     """
-    sz_of_pop: how big our repertoire is
-    sz_of_genome: how many genes our antibodies consist of
-    sz_of_clonal_pool: how many clones we create
-    sz_of_alphabet: this is the total number of potential genes
-    n_iterations: number of times we loop around, cloning & mutating ...
-    epsilon: tolerance - if within this distance to the optima, we stop adapting
+    :param sz_of_pop: how big our repertoire is
+    :param sz_of_genome: how many genes our antibodies consist of
+    :param sz_of_clonal_pool: how many clones we create
+    :param sz_of_alphabet: this is the total number of potential genes
+    :param n_iterations: number of times we loop around, cloning & mutating ...
+    :param epsilon: tolerance - if within this distance to the optima, we stop adapting
+    :param verbose: spit out more info
+    :returns    current_iteration: stppping iteration
+                repertoire: array of antibodies
+                distances: how far each antibody is away from the optima
     """
 
     # our "target": we need to find this particular genome (*big* search space)
@@ -25,7 +33,7 @@ def loop_with_antibody_selection(sz_of_pop=20,
 
     # now we need to construct a mutate operator; note, this could be passed
     # as a parameter if necessary
-    mutate_op = partial(contiguous_somatic_hypermutation,
+    mutate_op = partial(recomb.contiguous_somatic_hypermutation,
                         sz_of_genome=sz_of_genome,
                         sz_of_alphabet=sz_of_alphabet)
 
@@ -39,24 +47,30 @@ def loop_with_antibody_selection(sz_of_pop=20,
     current_iteration = 0
 
     for current_iteration in range(1, n_iterations + 1):
-        repertoire, distances = iteration(repertoire, distances, loss_function,
+        repertoire, distances = iteration(repertoire, loss_function,
                                           mutate_op, sz_of_genome, sz_of_clonal_pool)
-        done, index = early_stopping(distances, epsilon=epsilon)
+        done, index = recomb.early_stopping(distances, epsilon=epsilon)
         if done:
-            print(f"Reached convergence at iteration {current_iteration} within tolerance {epsilon}")
+            if verbose:
+                print(f"Reached convergence at iteration {current_iteration} within tolerance {epsilon}")
             return current_iteration, repertoire, distances
-        print(f"{distances}")
+        if verbose:
+            print(f"{distances}")
 
     return current_iteration, repertoire, distances
-
-
 
 
 def iteration(repertoire, loss_function, mutate_op, sz_of_genome, sz_of_clonal_pool):
     '''Single-step iteration of the algorithm. Go through the repertoire of antibodies,
         get their distance, clone them, then hypermutate them. Replace antibodies if a
         clone has higher affinity than the antibody in the repertoire. Replace the worst
-        performing antibody by randomly initialising it.'''
+        performing antibody by randomly initialising it.
+        :param repertoire: array of antibodies
+        :param loss_function: function we're trying to minimise, like MAE or RMSE
+        :param mutate_op: operator applied to the antibodies, like contiguous hypermutation
+        :param sz_of_genome: how many genes our antibody is built from
+        :param sz_of_clonal_pool: how many clones we're going to create
+        :return: the modified repertoire and the latest repertoire distances to the optima  '''
     # see how our current antibody repertoire is doing ...
     distances = recomb.get_distance(repertoire, loss_function)
     # clone, hypermutate, & replace where appropriate
@@ -70,28 +84,11 @@ def iteration(repertoire, loss_function, mutate_op, sz_of_genome, sz_of_clonal_p
 
     return repertoire, distances
 
-def early_stopping(distances, epsilon=1e2):
-    '''
-    early_stopping: If we are within a relatively small distance of the
-    antigen, we stop adapting the antibodies.
-    '''
-    for idx, distance in distances.items():
-        if distance <= 1e-1:
-            return True, idx
-    return False, -1
 
 
 
 
 
-def get_hotspot_and_region(sz):
-    '''Select a hotspot and contiguous region on the genome'''
-    (hotspot, length) = np.random.choice(sz, 2)
-    # We're going to mutate, so let's make sure we have *at least* one
-    # hotspot
-    if length == 0:
-        length = 1
-    return hotspot, length
 
 
 # JKK: i've looked for a more efficient, numpy-esque way of doing
@@ -100,19 +97,6 @@ def get_hotspot_and_region(sz):
 
 # JKK: there is a way! but frankly it looks like a pain in the arse.
 # JKK: let's do it the old-fashioned way ...
-
-def get_mutants(length, sz_of_alphabet):
-    return np.random.choice(sz_of_alphabet, length)
-
-
-def contiguous_somatic_hypermutation(antibody, sz_of_genome, sz_of_alphabet):
-    (hotspot, length) = get_hotspot_and_region(sz_of_genome)
-    # print(f"hotspot: {hotspot} : length: {length}")
-    mutants = get_mutants(length, sz_of_alphabet)
-    for idx in range(length):
-        index = (hotspot + idx) % sz_of_genome
-        antibody[index] = mutants[idx]
-    return antibody
 
 
 def get_repertoire_affinity(repertoire,
@@ -139,8 +123,6 @@ def get_antibody_affinity(antibody, antigen, maximum_distance, max_gene_affinity
     '''Gets a normalised affinity from the antigen in the interval [0,1].
         The higher the affinity, the better.'''
     return np.sum(maximum_distance - np.abs(antibody - antigen)) / (antigen.shape[0] * max_gene_affinity)
-
-
 
 
 def get_gene_frequency(repertoire):
@@ -187,12 +169,14 @@ def selection(distances, repertoire, loss_function, mutate_op, sz_of_clonal_pool
     return repertoire
 
 
-
-
 # this one's okay here, it's different  ...
 def create_clonal_pool(antibody, n_clone_pool, mutate_op):
     '''Takes an antibody & creates a pool of clones. They are then subjected to
-        a mutation process'''
+        a mutation process
+        :param antibody: numpy array representing the antibody
+        :param n_clone_pool: number of clones we're going to build
+        :param mutate_op: partial function of somatic hypermutation operator
+        :return: the hypermutated pool of clones'''
     # we don't want to change the antibody in the repertoire yet ...
     _antibody = np.copy(antibody)
     clonal_pool = np.tile(_antibody, (n_clone_pool, 1))
@@ -200,8 +184,6 @@ def create_clonal_pool(antibody, n_clone_pool, mutate_op):
         # mutate the flip out of it
         clonal_pool[i] = mutate_op(clonal_pool[i])
     return clonal_pool
-
-
 
 
 # TODO: move ...
@@ -223,5 +205,3 @@ def decode(interval, n_bits, bitstring):
         # store
         decoded.append(value)
     return np.array(decoded)
-
-

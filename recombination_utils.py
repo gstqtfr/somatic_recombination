@@ -1,5 +1,42 @@
 import numpy as np
 
+def get_mutants(length, sz_of_alphabet, weights=None):
+    """
+    Takes a length of a region on the antibody, and the number of genes, and
+    returns an array of mutant genes.Probability of selection of each gene
+    being selected can be given in the weights parameter.
+    :param length: the length of the contiguous region to mutate
+    :param sz_of_alphabet: how many different elements make up our genes
+    :param weights: if specified, the vector of probabilities used to select each gene
+    :return: array of genes
+    """
+    if weights is None:
+        return np.random.choice(sz_of_alphabet, length, p=weights)
+    else:
+        return np.random.choice(sz_of_alphabet, length)
+
+
+def contiguous_somatic_hypermutation(antibody, sz_of_genome, sz_of_alphabet, weights=None):
+    (hotspot, length) = get_hotspot_and_region(sz_of_genome)
+    # print(f"hotspot: {hotspot} : length: {length}")
+    if weights is None:
+        mutants = get_mutants(length, sz_of_alphabet)
+    else:
+        mutants = get_mutants(length, sz_of_alphabet, weights)
+    for idx in range(length):
+        index = (hotspot + idx) % sz_of_genome
+        antibody[index] = mutants[idx]
+    return antibody
+
+def get_hotspot_and_region(sz):
+    '''Select a hotspot and contiguous region on the genome'''
+    (hotspot, length) = np.random.choice(sz, 2)
+    # We're going to mutate, so let's make sure we have *at least* one
+    # hotspot
+    if length == 0:
+        length = 1
+    return hotspot, length
+
 def random_sequence(size, n=255):
     '''Return a random sequence, used to initialize antibodies or the
         initial repertoire of antibodies'''
@@ -19,6 +56,7 @@ def initialize_gene_affinity(sz_of_alphabet, beta):
     repertoire_gene_affinity = np.full(shape=(sz_of_alphabet), fill_value=beta)
     return repertoire_gene_affinity
 
+
 # this one's okay here, different dynamics ...
 def get_distance(antibodies, loss_function):
     """ get_distance calculates the loss of each antibody"""
@@ -27,12 +65,14 @@ def get_distance(antibodies, loss_function):
         distance[i] = loss_function(antibody=antibodies[i])
     return dict(sorted(distance.items(), key=lambda item: item[1]))
 
+
 def get_worst_distance(distance):
     """given the distances calc'd by the loss function, return the most distant antibody"""
     reversed_distance = dict(sorted(distance.items(),
                                     key=lambda item: item[1],
                                     reverse=True))
     return (list(reversed_distance.items())[0])[0]
+
 
 def gene_affinity_per_antibody(repertoire, affinities, repertoire_gene_affinity, beta):
     """Gets the affinity (distance from) the target antigen for each antibody
@@ -48,11 +88,18 @@ def gene_affinity_per_antibody(repertoire, affinities, repertoire_gene_affinity,
         for gene in antibody:
             repertoire_gene_affinity[gene] = antibody_affinity * beta
 
-    # now we need to add beta tp any genes that aren't currently
-    # expressed in the repertoire, so they have a probability of
-    # being selected
-
     return repertoire_gene_affinity
+
+
+def early_stopping(distances, epsilon=1e2):
+    '''
+    early_stopping: If we are within a relatively small distance of the
+    antigen, we stop adapting the antibodies.
+    '''
+    for idx, distance in distances.items():
+        if distance <= epsilon:
+            return True, idx
+    return False, -1
 
 # a couple of simple loss functions, used to find the affinity between
 # the antibody and the antigen
@@ -63,4 +110,3 @@ def mean_absolute_error(antigen, antibody):
 
 def root_mean_square_error(antigen, antibody):
     return np.sqrt(np.sum((antigen - antibody) ** 2.0) / antigen.shape[0])
-
