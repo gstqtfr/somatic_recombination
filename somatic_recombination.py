@@ -85,20 +85,6 @@ def iteration(repertoire, loss_function, mutate_op, sz_of_genome, sz_of_clonal_p
     return repertoire, distances
 
 
-
-
-
-
-
-
-# JKK: i've looked for a more efficient, numpy-esque way of doing
-# JKK: this, & i can't find one. so that's irritating. looks like
-# JKK: the best way of doing this is to
-
-# JKK: there is a way! but frankly it looks like a pain in the arse.
-# JKK: let's do it the old-fashioned way ...
-
-
 def get_repertoire_affinity(repertoire,
                             antigen,
                             maximum_distance,

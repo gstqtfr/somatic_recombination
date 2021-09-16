@@ -20,9 +20,9 @@ def contiguous_somatic_hypermutation(antibody, sz_of_genome, sz_of_alphabet, wei
     (hotspot, length) = get_hotspot_and_region(sz_of_genome)
     # print(f"hotspot: {hotspot} : length: {length}")
     if weights is None:
-        mutants = get_mutants(length, sz_of_alphabet)
+        mutants = get_mutants(length=length, sz_of_alphabet=sz_of_alphabet, weights=None)
     else:
-        mutants = get_mutants(length, sz_of_alphabet, weights)
+        mutants = get_mutants(length=length, sz_of_alphabet=sz_of_alphabet, weights=weights)
     for idx in range(length):
         index = (hotspot + idx) % sz_of_genome
         antibody[index] = mutants[idx]
