@@ -2,7 +2,9 @@
 
 from collections import defaultdict
 from functools import partial
+
 import numpy as np
+
 import recombination_utils as recomb
 
 
@@ -23,7 +25,7 @@ def loop_with_antibody_selection(sz_of_pop=20,
     :param verbose: spit out more info
     :returns    current_iteration: stppping iteration
                 repertoire: array of antibodies
-                distances: how far each antibody is away from the optima
+                affinities: how far each antibody is away from the optima
     """
 
     # our "target": we need to find this particular genome (*big* search space)
@@ -68,7 +70,7 @@ def iteration(repertoire, loss_function, mutate_op, sz_of_genome, sz_of_clonal_p
         :param mutate_op: operator applied to the antibodies, like contiguous hypermutation
         :param sz_of_genome: how many genes our antibody is built from
         :param sz_of_clonal_pool: how many clones we're going to create
-        :return: the modified repertoire and the latest repertoire distances to the optima  '''
+        :return: the modified repertoire and the latest repertoire affinities to the optima  '''
     # see how our current antibody repertoire is doing ...
     distances = recomb.get_distance(repertoire, loss_function)
     # clone, hypermutate, & replace where appropriate
@@ -81,32 +83,6 @@ def iteration(repertoire, loss_function, mutate_op, sz_of_genome, sz_of_clonal_p
     repertoire[worst_antibody] = np.array([recomb.random_sequence(size=sz_of_genome)], dtype='int16')
 
     return repertoire, distances
-
-
-def get_repertoire_affinity(repertoire,
-                            antigen,
-                            maximum_distance,
-                            max_gene_affinity=255):
-    '''Get the affinity of the repertoire of antibodies with the
-        target, which is given by the antigen array.'''
-    repertoire_affinity = defaultdict(list)
-
-    for idx in range(0, repertoire.shape[0]):
-        repertoire_affinity[idx] = get_antibody_affinity(
-            antibody=repertoire[idx],
-            antigen=antigen,
-            maximum_distance=maximum_distance)
-
-    # we return the affinities sorted in reverse order
-    return dict(sorted(repertoire_affinity.items(),
-                       key=lambda item: item[1],
-                       reverse=True))
-
-
-def get_antibody_affinity(antibody, antigen, maximum_distance, max_gene_affinity=255):
-    '''Gets a normalised affinity from the antigen in the interval [0,1].
-        The higher the affinity, the better.'''
-    return np.sum(maximum_distance - np.abs(antibody - antigen)) / (antigen.shape[0] * max_gene_affinity)
 
 
 def get_gene_frequency(repertoire):

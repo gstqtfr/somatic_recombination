@@ -6,7 +6,7 @@ import recombination_utils as recomb
 import vdj_recombination as vdj
 
 
-# repertoire, weights, distances = vdj.loop_with_gene_and_antibody_selection(
+# repertoire, weights, affinities = vdj.loop_with_gene_and_antibody_selection(
 #         mutate_op=mutate_op,
 #         sz_of_pop=30,
 #         sz_of_clonal_pool=30,
