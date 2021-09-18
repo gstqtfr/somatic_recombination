@@ -119,10 +119,9 @@ def loop_with_vdj_recombination(mutate_op,
 
     # now, we need to normalise the weights shonary
     weights = recomb.weights_normalisation(weights, beta, epsilon)
+    n = 0
 
-    distances = defaultdict(list)
-
-    for n in range(1, n_iterations):
+    for n in range(1, n_iterations+1):
         affinities, repertoire, weights = iteration(loss_function=loss_function,
                                                     repertoire=repertoire,
                                                          antigen=antigen,
@@ -135,76 +134,19 @@ def loop_with_vdj_recombination(mutate_op,
                                                          sz_of_genome=sz_of_genome)
         # early-stopping: are we close enough yet?
         # we need to find the distances (rather than the affinities ...)
+        distances = dict([(idx, loss_function(antibody=antibody))
+                                for idx, antibody in enumerate(repertoire)])
 
         # then we need to see if we're within epsilon of the target
-
-
-
-        avg_affinity = np.sum(np.array(list(affinities.values()))) / sz_of_pop
-        print(f"{n}\t{avg_affinity}")
-
-    return repertoire, affinities, weights
-
-
-
-def loop_with_gene_and_antibody_selection(mutate_op,
-                                          sz_of_pop=20,
-                                          sz_of_genome=10,
-                                          sz_of_clonal_pool=20,
-                                          sz_of_alphabet=256,
-                                          n_iterations=100,
-                                          epsilon=1e-1,
-                                          verbose=False):
-    # our "target": we need to find this particular genome (*big* search space)
-    antigen = np.full(shape=(sz_of_genome,), fill_value=0, dtype='int16')
-    # this is the maximum distance, as far away as possible from our target as
-    # we can get
-    maximum_distance = np.full(shape=(sz_of_genome), fill_value=(sz_of_alphabet - 1), dtype='int16')
-
-    beta = 1.0 / sz_of_alphabet
-
-    # the repertoire is our population of "circulating" antibodies
-    repertoire = recomb.initialize_population(sz_of_pop, sz_of_genome)
-    # we give each gene a (fairly small) probability of being chosen
-    weights = recomb.initialize_gene_affinity(sz_of_alphabet, beta)
-
-    # this is our loss function
-    loss_function = partial(recomb.mean_absolute_error, antigen=antigen)
-
-    # FIXME: JKK: this is fundamentally a bit fucked.
-    # FIXME: JKK: this below gets the distance. lower is better.
-    # get the distance
-    distances = recomb.get_distance(repertoire, loss_function=loss_function)
-
-    # get the affinity of the gene expressed in each antibody
-    weights = recomb.gene_affinity_per_antibody(repertoire=repertoire,
-                                                distances=distances,
-                                                weights=weights,
-                                                sz_of_genome=sz_of_genome)
-
-    for n in range(1, n_iterations + 1):
-        distances, repertoire, weights = iteration(
-            repertoire=repertoire,
-            affinities=distances,
-            loss_function=loss_function,
-            weights=weights,
-            mutate_op=mutate_op,
-            beta=beta,
-            sz_of_genome=sz_of_genome,
-            sz_of_clonal_pool=sz_of_clonal_pool)
-        # early_stopping(affinities, epsilon=1e2)
-        done, index = recomb.early_stopping(distances, epsilon)
+        done, index = recomb.early_stopping(distances, epsilon=epsilon)
         if done:
-            if verbose:
-                print(f"Reached convergence at iteration {n} within tolerance {epsilon}")
-            return n, repertoire, weights, distances
-        avg_distance = np.sum(np.array(list(distances.values()))) / sz_of_pop
+            #print(f"Reached convergence at iteration {n} within tolerance {epsilon}")
+            return n, repertoire, affinities, weights
 
-        if verbose:
-            print(f"{n}\t{avg_distance:.2f}")
+        #avg_affinity = np.sum(np.array(list(affinities.values()))) / sz_of_pop
+        #print(f"{n}\t{avg_affinity}")
 
-        # dummy return statement, it'll do for now
-    return n, repertoire, weights, distances
+    return n, repertoire, affinities, weights
 
 
 def create_clonal_pool(antibody, weights, sz_of_genome, sz_of_clonal_pool, mutate_op):
